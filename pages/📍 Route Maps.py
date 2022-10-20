@@ -304,7 +304,7 @@ if len(st.session_state["outlet"]) > 0 and  st.session_state["longitude"] != 0 a
                 st.markdown("Please download the data to save it offline")
 
                 # add url link to columns
-                df_merged_clean["google_maps_url"] = df_merged_clean["google_maps"].apply(lambda x: f'<a href={x}">{x}</a>')
+                df_merged_clean["google_maps_url"] = df_merged_clean["google_maps"].apply(lambda x: f'<a href="{x}">{x}</a>')
 
                 # slicing the important columns
                 df_merged_clean_linked = df_merged_clean.loc[:, ["nama_outlet", "google_maps_url", "duration_to_previous", "distance_to_previous"]].copy()
