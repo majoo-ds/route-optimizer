@@ -1,4 +1,3 @@
-from logging import Filterer
 import streamlit as st
 import pandas as pd
 import folium
@@ -17,29 +16,32 @@ from pandas.api.types import (
     is_numeric_dtype,
     is_object_dtype,
 )
+from folium.plugins import BeautifyIcon
 
-st.set_page_config(layout="wide", page_title="Route Optimizer", page_icon="🎭")
-st.markdown("# Route Optimizer on CRM's Leads Data")
-st.markdown(f"Outlet data updated manually at __{datetime.datetime(2022,10,21).strftime('%Y-%m-%d')}__")
+st.set_page_config(layout="wide", page_title="Route Optimizer", page_icon="💎")
+st.markdown("# Route Optimizer on Data Habs Scraping")
+st.markdown(f"Outlet data updated automatically from spreadsheets")
 
-local_files = "data/Data_Canvassing.csv"
+file_url='https://docs.google.com/spreadsheets/d/e/2PACX-1vSvPKfCcokx7jBATBeDziy-4zeNGUWo_6uUG4CfEchmTHxUNX1HelhloU0oKG3HbNIkieGD7KPmCn9A/pub?output=csv'
 
 @st.cache(allow_output_mutation=True)
-def get_outlet_data(path):
+def get_data_habs(path):
     df =  pd.read_csv(path)
     # adding new columns (for openrouteservice api compatibility)
     df["needed_amount"] = 1
     
+    df.columns = df.columns.str.lower().str.replace(' ', '_')
     # adding new column of google maps url
-    df["google_maps"] = df.apply(lambda row: "https://www.google.com/maps/?q=" + str(row["outlet_langitude"]) + "," + str(row["outlet_longitude"]), axis=1)
-
-    # phone number formatting
-    df["pic_phone"] = df["pic_phone"].astype("category")
+    df["google_maps"] = df.apply(lambda row: "https://www.google.com/maps/?q=" + str(row["latitude"]) + "," + str(row["longitude"]), axis=1)
+    df['longitude'] =  df['longitude'].astype('str')
+    df['latitude'] =  df['latitude'].astype('str')
+    df = df.loc[(df['latitude'].notnull()) & (df['latitude'] != 'nan') & (df['visited'] != 'Yes')].copy()
 
     return df
 
 # run get_outlet_data
-dataframe = get_outlet_data(local_files)
+dataframe = get_data_habs(file_url)
+
 
 # auto filter function
 def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
@@ -122,26 +124,11 @@ st.subheader("Explore Data Here")
 st.markdown("##### Before inputting into sidebar, please explore data below by filtering out")
 st.dataframe(filter_dataframe(dataframe))
 
-
 ######################## SIDEBAR PART 1 ###############################
 st.sidebar.markdown("#### Outlet Selection Section")
-############ SELECT PROVINCE ############
-select_province = st.sidebar.multiselect(label="Select province", options=dataframe["m_province_name"].unique().tolist(), default="DKI JAKARTA", help="You can select multiple, but please select as minimum as possible to optimize the results")
-# initiate session_state for select_province
-if "province" not in st.session_state:
-    st.session_state["province"] = select_province
-
-# button
-submit_province = st.sidebar.button("Change province")
-# button is clicked
-if submit_province:
-    st.session_state["province"] = select_province
-
-
-
 ############ SELECT CITY ############
-select_city = st.sidebar.multiselect(label="Select city", options=dataframe.loc[dataframe["m_province_name"].isin(st.session_state["province"]), "m_regency_name"].unique().tolist(), default="KOTA JAKARTA SELATAN", help="You can select multiple, but please select as minimum as possible to optimize the results")
-# initiate session_state for select_city
+select_city = st.sidebar.multiselect(label="Select city", options=dataframe["kota/kab"].unique().tolist(), default=['Kota Jakarta Selatan', 'South Jakarta City'], help="You can select multiple, but please select as minimum as possible to optimize the results")
+# initiate session_state for select_province
 if "city" not in st.session_state:
     st.session_state["city"] = select_city
 
@@ -152,27 +139,8 @@ if submit_city:
     st.session_state["city"] = select_city
 
 
-
-############ SELECT DISTRICT ############
-select_district = st.sidebar.multiselect(label="Select district", options=dataframe.loc[(dataframe["m_province_name"].isin(st.session_state["province"])) & (dataframe["m_regency_name"].isin(st.session_state["city"])), "m_district_name"].unique().tolist(), 
-    default="KEBAYORAN BARU", 
-    help="You can select multiple, but please select as minimum as possible to optimize the results"
-)
-
-# initiate session_state for select_district
-if "district" not in st.session_state:
-    st.session_state["district"] = select_district
-
-# button
-submit_district = st.sidebar.button("Change district")
-# button is clicked
-if submit_district:
-    st.session_state["district"] = select_district
-
-
-
 ############ SELECT OUTLET ############
-select_outlet = st.sidebar.multiselect(label="Select outlet", options=dataframe.loc[(dataframe["m_province_name"].isin(st.session_state["province"])) & (dataframe["m_regency_name"].isin(st.session_state["city"])) & (dataframe["m_district_name"].isin(st.session_state["district"])), "outlet_name"].unique().tolist(), 
+select_outlet = st.sidebar.multiselect(label="Select outlet", options=dataframe.loc[(dataframe["kota/kab"].isin(st.session_state["city"])), "nama"].unique().tolist(), 
     help="You can select multiple, but please select as minimum as possible to optimize the results"
 )
 
@@ -187,7 +155,6 @@ if submit_outlet:
     st.session_state["outlet"] = select_outlet
 
 
-
 #################### Filtered DataFrame from sidebar #################################
 if len(st.session_state["outlet"]) > 0:
     # title
@@ -195,14 +162,11 @@ if len(st.session_state["outlet"]) > 0:
     st.markdown("Make sure you select corectly number of outlets on the sidebar")
     # dataframe
     filtered_dataframe = dataframe.loc[
-        (dataframe["m_province_name"].isin(st.session_state["province"])) &
-        (dataframe["m_regency_name"].isin(st.session_state["city"])) &
-        (dataframe["m_district_name"].isin(st.session_state["district"])) &
-        (dataframe["outlet_name"].isin(st.session_state["outlet"]))].copy()
+        (dataframe["kota/kab"].isin(st.session_state["city"])) &
+        (dataframe["nama"].isin(st.session_state["outlet"]))].copy()
     st.dataframe(filtered_dataframe)
 else:
-    st.warning("You have no outlets selected, please select first.")
-
+    st.warning("You have no outlets selected, please select first from the sidebar.")
 
 
 ######################## SIDEBAR PART 2 ###############################
@@ -257,10 +221,10 @@ with st.sidebar:
     url = "https://tekno.kompas.com/read/2022/06/05/17150037/cara-cari-longitude-dan-latitude-di-google-maps-buat-isi-data-alamat"
     # center point
     coor1, coor2 = st.columns(2)
-    input_latitude = coor1.number_input(label="Input latitude of start point", help="Example format: -6.xxxxxxx")
-    input_longitude = coor2.number_input(label="Input longitude of start point", help="Example format: 10x.xxxxxxx")
+    input_latitude = coor1.number_input(label="Input latitude of start point", value=-6.2317941, help="Example format: -6.xxxxxxx")
+    input_longitude = coor2.number_input(label="Input longitude of start point", value=106.7350485, help="Example format: 10x.xxxxxxx")
     # clickable link
-    st.markdown("_How to find out longitude and latitude [here](%s)_" % url)
+    st.markdown("_How to find out longitude and latitude [click here](%s)_" % url)
 
 # initiate session_state for input_longitude and input_latitude
 if "longitude" not in st.session_state:
@@ -278,8 +242,6 @@ if submit_start:
     st.session_state["longitude"] = input_longitude
     st.session_state["latitude"] = input_latitude
 
-
-
 ################# POST BUTTON TO CALL OPENROUTESERVICE API ##############
 if len(st.session_state["outlet"]) > 0 and  st.session_state["longitude"] != 0 and st.session_state["latitude"] != 0:
     post_ors_api = st.sidebar.button("Run Optimizer")
@@ -293,6 +255,7 @@ else:
 if len(st.session_state["outlet"]) > 0 and  st.session_state["longitude"] != 0 and st.session_state["latitude"] != 0:
     filtered_dataframe["open"] = datetime.datetime.today().replace(hour=st.session_state["clock_hour"], minute=st.session_state["clock_minute"], second=0)
     filtered_dataframe["close"] = datetime.datetime.today().replace(hour=st.session_state["clock_hour_finish"], minute=st.session_state["clock_minute_finish"], second=0)
+
 
 
 # Define the vehicles (how many canvassers are)
@@ -313,6 +276,7 @@ def get_vehicle():
         )
     return vehicles
 
+
 # Next, define the delivery stations
 def get_delivery():   
     # https://openrouteservice-py.readthedocs.io/en/latest/openrouteservice.html#openrouteservice.optimization.Job
@@ -321,7 +285,7 @@ def get_delivery():
         deliveries.append(
             openrouteservice.optimization.Job(
                 id=delivery.Index,
-                location=[delivery.outlet_longitude, delivery.outlet_langitude],
+                location=[float(delivery.longitude), float(delivery.latitude)],
                 service=st.session_state["minutes"]*60,
                 amount=[delivery.needed_amount],
                 time_windows=[[int(delivery.open.timestamp()), int(delivery.close.timestamp())]]
@@ -330,6 +294,9 @@ def get_delivery():
 
     return deliveries
 
+
+
+# this function is intended to call ors api
 
 # this function is intended to call ors api
 @st.cache(allow_output_mutation=True)
@@ -344,9 +311,7 @@ def get_optimizer():
 
     return result
 
-
 ############################## CONDITIONS TO CALL FUNCTION #####################################
-
 if len(st.session_state["outlet"]) > 0 and  st.session_state["longitude"] != 0 and st.session_state["latitude"] != 0:
     if post_ors_api:
         try:
@@ -389,7 +354,7 @@ if len(st.session_state["outlet"]) > 0 and  st.session_state["longitude"] != 0 a
                 # merge filtered dataframe and df_stations to get nama_outlet and google_maps link
                 df_merged = pd.merge(
                     df_stations,
-                    filtered_dataframe.loc[:, ["mt_leads_code", "outlet_name", "google_maps"]],
+                    filtered_dataframe.loc[:, ["nama", "google_maps", "telp"]],
                     how="outer", 
                     left_on="Station ID", 
                     right_index=True
@@ -408,7 +373,7 @@ if len(st.session_state["outlet"]) > 0 and  st.session_state["longitude"] != 0 a
 
                 # Plot the locations on the map with more info in the ToolTip (using for loop)
                 for location in df_merged_clean.itertuples():
-                    tooltip = folium.map.Tooltip("Merchant: {}".format(location.outlet_name))
+                    tooltip = folium.map.Tooltip("Merchant: {}".format(location.nama))
                     popup=folium.map.Popup(f"Distance to Previous: {location.distance_to_previous/1000:.2f} km <br> Duration to Previous: {location.duration_to_previous/60:.2f} minutes <br> Maps URL: <a href={location.google_maps}>{location.google_maps}</a>")
                     
                     folium.Marker(
@@ -471,7 +436,7 @@ if len(st.session_state["outlet"]) > 0 and  st.session_state["longitude"] != 0 a
 
                 ######################## SHOWING DATAFRAME (HTML) #########################
                 # slicing the important columns
-                df_merged_clean_linked = df_merged_clean.loc[:, ["mt_leads_code", "outlet_name", "arrival", "departure", "google_maps_url", "duration_to_previous", "distance_to_previous"]].copy()
+                df_merged_clean_linked = df_merged_clean.loc[:, ["nama", "arrival", "departure", "google_maps_url", "duration_to_previous", "distance_to_previous"]].copy()
                 
                 # change unit in duration
                 df_merged_clean_linked['duration_to_previous'] = df_merged_clean_linked['duration_to_previous']/60
@@ -482,7 +447,7 @@ if len(st.session_state["outlet"]) > 0 and  st.session_state["longitude"] != 0 a
                 df_merged_clean_linked['distance_to_previous'] = df_merged_clean_linked['distance_to_previous'].round(2)
 
                 # rename columns
-                df_merged_clean_linked.columns = ["mt_leads_code", "outlet_name", "arrival", "departure", "google_maps_url", "duration_to_previous_in_minutes", "distance_to_previous_in_km"]
+                df_merged_clean_linked.columns = ["nama", "arrival", "departure", "google_maps_url", "duration_to_previous_in_minutes", "distance_to_previous_in_km"]
                 # convert to HTML
                 df_link = df_merged_clean_linked.copy().to_html(escape=False)
                 # show the HTML
