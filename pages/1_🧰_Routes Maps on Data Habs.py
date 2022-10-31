@@ -299,7 +299,7 @@ def get_delivery():
 # this function is intended to call ors api
 
 # this function is intended to call ors api
-@st.cache(allow_output_mutation=True)
+@st.cache(allow_output_mutation=True, ttl=30)
 def get_optimizer():
     # Initialize a client and make the request
     ors_client = openrouteservice.Client(key='5b3ce3597851110001cf6248f903a2eb28b04234bcb4b7ada2ccf7c3')  # Get an API key from https://openrouteservice.org/dev/#/signup
